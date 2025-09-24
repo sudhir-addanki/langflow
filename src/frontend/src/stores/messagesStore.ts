@@ -18,7 +18,17 @@ export const useMessagesStore = create<MessagesStoreType>((set, get) => ({
   addMessage: (message) => {
     const existingMessage = get().messages.find((msg) => msg.id === message.id);
     if (existingMessage) {
-      get().updateMessagePartial(message);
+      // Check if this is a streaming partial message (state: "partial")
+      if (message.properties?.state === "partial" && message.text) {
+        // For streaming, accumulate the text content since backend now sends individual chunks
+        get().updateMessageText(message.id, message.text);
+        // Update other properties but preserve accumulated text
+        const { text, ...messageWithoutText } = message;
+        get().updateMessagePartial(messageWithoutText);
+      } else {
+        // For complete messages, replace entirely
+        get().updateMessagePartial(message);
+      }
       return;
     }
     if (message.sender === "Machine") {

@@ -144,14 +144,22 @@ class LCAgentComponent(Component):
             input_dict["system_prompt"] = self.system_prompt
         if hasattr(self, "chat_history") and self.chat_history:
             if isinstance(self.chat_history, Data):
+                input_dict["chat_history"] = self._data_to_messages_skip_empty([self.chat_history])
+            elif all(isinstance(m, Message) for m in self.chat_history):
+                input_dict["chat_history"] = self._data_to_messages_skip_empty([m.to_data() for m in self.chat_history])
+            else:
+                # Fallback to original method for other types
                 input_dict["chat_history"] = data_to_messages(self.chat_history)
-            if all(isinstance(m, Message) for m in self.chat_history):
-                input_dict["chat_history"] = data_to_messages([m.to_data() for m in self.chat_history])
         if hasattr(input_dict["input"], "content") and isinstance(input_dict["input"].content, list):
             # ! Because the input has to be a string, we must pass the images in the chat_history
 
             image_dicts = [item for item in input_dict["input"].content if item.get("type") == "image"]
             input_dict["input"].content = [item for item in input_dict["input"].content if item.get("type") != "image"]
+
+            # Skip if content becomes empty after removing images
+            if not input_dict["input"].content:
+                # If no text content remains, handle gracefully
+                input_dict["input"].content = [{"type": "text", "text": ""}]
 
             if "chat_history" not in input_dict:
                 input_dict["chat_history"] = []
@@ -202,6 +210,21 @@ class LCAgentComponent(Component):
     @abstractmethod
     def create_agent_runnable(self) -> Runnable:
         """Create the agent."""
+
+    def _data_to_messages_skip_empty(self, data: list[Data]) -> list["BaseMessage"]:
+        """Convert data to messages, filtering only empty text while preserving non-text content."""
+        messages = []
+        for value in data:
+            # Only skip if the message has a text attribute that is empty/whitespace
+            text = getattr(value, "text", None)
+            if isinstance(text, str) and not text.strip():
+                # Skip only messages with empty/whitespace-only text strings
+                continue
+
+            lc_message = value.to_lc_message()
+            messages.append(lc_message)
+
+        return messages
 
     def validate_tool_names(self) -> None:
         """Validate tool names to ensure they match the required pattern."""

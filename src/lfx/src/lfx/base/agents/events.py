@@ -34,7 +34,7 @@ class InputDict(TypedDict):
 
 def _build_agent_input_text_content(agent_input_dict: InputDict) -> str:
     final_input = agent_input_dict.get("input", "")
-    return f"**Input**: {final_input}"
+    return f"{final_input}"
 
 
 def _calculate_duration(start_time: float) -> int:
@@ -279,8 +279,9 @@ async def handle_on_chain_stream(
         start_time = perf_counter()
     elif isinstance(data_chunk, AIMessageChunk):
         output_text = _extract_output_text(data_chunk.content)
-        if output_text and isinstance(agent_message.text, str):
-            agent_message.text += output_text
+        if output_text and output_text.strip():
+            # For streaming, send only the current chunk (not accumulated text)
+            agent_message.text = output_text
             agent_message.properties.state = "partial"
             agent_message = await send_message_method(message=agent_message)
         if not agent_message.text:
