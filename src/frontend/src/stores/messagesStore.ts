@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { MessagesStoreType } from "../types/zustand/messages";
+import { MessagesStoreType } from "../types/zustand/messages";
 
 export const useMessagesStore = create<MessagesStoreType>((set, get) => ({
   displayLoadingMessage: false,
@@ -19,9 +19,18 @@ export const useMessagesStore = create<MessagesStoreType>((set, get) => ({
     const existingMessage = get().messages.find((msg) => msg.id === message.id);
     if (existingMessage) {
       // Check if this is a streaming partial message (state: "partial")
-      if (message.properties?.state === "partial" && message.text) {
+      if (message.properties?.state === "partial") {
         // For streaming, accumulate the text content since backend now sends individual chunks
-        get().updateMessageText(message.id, message.text);
+        // But first check if this chunk would create duplication
+        const currentText = existingMessage.text || "";
+        const newChunk = message.text || "";
+
+        // Only add the chunk if it's not already at the end of the current text
+        // This prevents duplication when the same chunk is sent multiple times
+        if (newChunk && !currentText.endsWith(newChunk)) {
+          get().updateMessageText(message.id, newChunk);
+        }
+
         // Update other properties but preserve accumulated text
         const { text, ...messageWithoutText } = message;
         get().updateMessagePartial(messageWithoutText);
@@ -69,7 +78,7 @@ export const useMessagesStore = create<MessagesStoreType>((set, get) => ({
         if (state.messages[i].id === id) {
           updatedMessages[i] = {
             ...updatedMessages[i],
-            text: updatedMessages[i].text + chunk,
+            text: (updatedMessages[i].text || "") + chunk,
           };
           break;
         }
